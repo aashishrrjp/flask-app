@@ -3,7 +3,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-  return "Helllo ji we are using github actions from flask on GKE!"
+  return "Helllo ji we are using github actions from flask on GKE cloud!"
 
 if __name__ == '__main__':
   app.run(host='0.0.0.0', port=5000)
