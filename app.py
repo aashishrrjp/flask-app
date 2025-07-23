@@ -46,7 +46,7 @@ def reset():
 
 @app.route('/status')
 def status():
-    return f"📊 You've made {guess_count} guess(es) so far."
+    return f"📊 You have made {guess_count} guess(es) so far."
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
