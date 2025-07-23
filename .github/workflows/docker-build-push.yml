@@ -9,55 +9,46 @@ on:
       - 'Dockerfile'
 
 env:
-  PROJECT_ID: grogu-project                  # Your GCP project ID
-  AR_REPO_LOCATION: us-central1              # Region of your Artifact Registry (e.g., us-central1)
-  AR_REPO_NAME: gcr.io              # Name of your Artifact Registry Docker repository (e.g., flask-app-repo)
-  IMAGE_NAME: flask-app                      # Name for your Docker image within the repository
+  PROJECT_ID: grogu-project                     # Your GCP project ID
+  AR_REPO_LOCATION: us-central1                # Artifact Registry region
+  AR_REPO_NAME: flask-app                      # Your Artifact Registry repository name
+  IMAGE_NAME: flask-app                        # Image name within Artifact Registry
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      # id-token: 'write' # Only needed for Workload Identity Federation
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4 # Use a newer version of checkout if possible
+        uses: actions/checkout@v4
 
-      # Step 1: Authenticate to Google Cloud using the service account key
       - name: Authenticate to Google Cloud
-        id: auth
-        uses: google-github-actions/auth@v2 # This action handles authentication
+        uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }} # Provide the base64-encoded service account key
+          credentials_json: ${{ secrets.GCP_SA_KEY }} # Base64-encoded service account key
 
-      # Step 2: Set up the Google Cloud SDK
-      # This action installs the gcloud CLI and sets the default project.
-      # It relies on the authentication established in the previous step.
       - name: Set up Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2 # Use v2 for setup-gcloud
+        uses: google-github-actions/setup-gcloud@v2
         with:
-          project_id: grogu-project
+          project_id: ${{ env.PROJECT_ID }}
 
       - name: Configure Docker for Artifact Registry
-        # This command now works because `gcloud auth` has already been established by the 'Auth' step.
-        # It configures Docker to use gcloud as a credential helper for Artifact Registry.
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev
+        run: gcloud auth configure-docker ${{ env.AR_REPO_LOCATION }}-docker.pkg.dev
 
-      - name: Build Docker image
+      - name: Build Docker Image
         run: |
-          FULL_IMAGE_PATH=gcr.io/grogu-project/flask-app
-          IMAGE_TAG=${{ github.sha }} # Use the commit SHA for the unique tag
+          FULL_IMAGE_PATH=${{ env.AR_REPO_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO_NAME }}/${{ env.IMAGE_NAME }}
+          IMAGE_TAG=${{ github.sha }}
 
           docker build -t $FULL_IMAGE_PATH:$IMAGE_TAG .
-          # Also tag with 'latest' if you want a movable tag
           docker tag $FULL_IMAGE_PATH:$IMAGE_TAG $FULL_IMAGE_PATH:latest
 
-      - name: Push Docker image
+      - name: Push Docker Image
         run: |
-          FULL_IMAGE_PATH=gcr.io/grogu-project/flask-app
-          IMAGE_TAG=${{ github.sha }} # Ensure this matches the build tag
+          FULL_IMAGE_PATH=${{ env.AR_REPO_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO_NAME }}/${{ env.IMAGE_NAME }}
+          IMAGE_TAG=${{ github.sha }}
 
           docker push $FULL_IMAGE_PATH:$IMAGE_TAG
-          docker push $FULL_IMAGE_PATH:latest # Push the 'latest' tag as well
+          docker push $FULL_IMAGE_PATH:latest
