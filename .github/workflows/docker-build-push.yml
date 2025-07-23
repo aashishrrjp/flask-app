@@ -57,7 +57,7 @@ jobs:
 
       - name: Push Docker image
         run: |
-          FULL_IMAGE_PATH=us-central1-docker.pkg.dev/grogu-project/gcr.io/flask-app
+          FULL_IMAGE_PATH=gcr.io/grogu-project/flask-app
           IMAGE_TAG=${{ github.sha }}
 
           docker push $FULL_IMAGE_PATH:$IMAGE_TAG
