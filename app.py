@@ -30,7 +30,7 @@ def guess(number):
         msg = (
             f"🎉 Correct! {number} was the number! "
             f"You guessed it in {guess_count} attempts! "
-            "Starting a new game... 🔄"
+            "Starting a new game.. 🔄"
         )
         # Reset game
         secret_number = random.randint(1, 100)
