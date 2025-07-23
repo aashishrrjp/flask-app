@@ -43,7 +43,7 @@ jobs:
       - name: Configure Docker for Artifact Registry
         # This command now works because `gcloud auth` has already been established by the 'Auth' step.
         # It configures Docker to use gcloud as a credential helper for Artifact Registry.
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev
 
       - name: Build Docker image
         run: |
