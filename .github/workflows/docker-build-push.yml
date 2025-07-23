@@ -1,4 +1,4 @@
-name: Build and Push Docker Image to GCP Artifact Registry
+name: CI - Build and Push Docker Image to GCP Artifact Registry
 
 on:
   push:
@@ -7,27 +7,32 @@ on:
       - 'app.py'
       - 'requirements.txt'
       - 'Dockerfile'
+      # Removed 'test_app.py' as tests are no longer included
 
 env:
-  PROJECT_ID: grogu-project                     # Your GCP project ID
-  AR_REPO_LOCATION: us-central1                # Artifact Registry region
-  AR_REPO_NAME: flask-app                      # Your Artifact Registry repository name
-  IMAGE_NAME: flask-app                        # Image name within Artifact Registry
+  PROJECT_ID: grogu-project                  # Your GCP project ID
+  AR_REPO_LOCATION: us-central1              # Artifact Registry region
+  AR_REPO_NAME: flask-app                    # Your Artifact Registry repository name
+  IMAGE_NAME: flask-app                      # Image name within Artifact Registry
 
 jobs:
-  build-and-push:
+  build-and-push: # Renamed back to reflect no testing
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
+      id-token: 'write' # REQUIRED for Workload Identity Federation (recommended over SA key)
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout Application Repository
         uses: actions/checkout@v4
 
-      - name: Authenticate to Google Cloud
+      # --- Authenticate to Google Cloud using Workload Identity Federation ---
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        id: auth_gcp
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }} # Base64-encoded service account key
+          workload_identity_provider: projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ secrets.GCP_WORKLOAD_IDENTITY_POOL }}/providers/${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }} # Service account email for GHA
 
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -37,18 +42,52 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.AR_REPO_LOCATION }}-docker.pkg.dev
 
-      - name: Build Docker Image
+      - name: Build and Tag Docker Image
+        id: build_image_step
         run: |
-          FULL_IMAGE_PATH=${{ env.AR_REPO_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO_NAME }}/${{ env.IMAGE_NAME }}
-          IMAGE_TAG=${{ github.sha }}
+          FULL_IMAGE_REPO="${{ env.AR_REPO_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO_NAME }}/${{ env.IMAGE_NAME }}"
+          IMAGE_TAG="${{ github.sha }}"
+          
+          docker build -t "$FULL_IMAGE_REPO:$IMAGE_TAG" .
+          docker tag "$FULL_IMAGE_REPO:$IMAGE_TAG" "$FULL_IMAGE_REPO:latest"
 
-          docker build -t $FULL_IMAGE_PATH:$IMAGE_TAG .
-          docker tag $FULL_IMAGE_PATH:$IMAGE_TAG $FULL_IMAGE_PATH:latest
+          echo "image_full_name=$FULL_IMAGE_REPO:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "image_repository=$FULL_IMAGE_REPO" >> "$GITHUB_OUTPUT"
 
-      - name: Push Docker Image
+      - name: Push Docker Image to Artifact Registry
         run: |
-          FULL_IMAGE_PATH=${{ env.AR_REPO_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO_NAME }}/${{ env.IMAGE_NAME }}
-          IMAGE_TAG=${{ github.sha }}
+          FULL_IMAGE_REPO="${{ steps.build_image_step.outputs.image_repository }}"
+          IMAGE_TAG="${{ github.sha }}"
+          
+          docker push "$FULL_IMAGE_REPO:$IMAGE_TAG"
+          docker push "$FULL_IMAGE_REPO:latest"
 
-          docker push $FULL_IMAGE_PATH:$IMAGE_TAG
-          docker push $FULL_IMAGE_PATH:latest
+      # --- Update GitOps Repository for Dev Environment ---
+      - name: Update Helm values file for Dev environment in GitOps repo
+        if: success()
+        uses: actions/checkout@v4
+        with:
+          repository: aashishrrjp/flask-app-deploy
+          path: gitops-repo
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Configure Git for Commit
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+        working-directory: gitops-repo
+
+      - name: Update values-dev.yaml
+        run: |
+          DEV_VALUES_FILE="helm/flask/values-dev.yaml"
+          NEW_IMAGE_REPOSITORY="${{ steps.build_image_step.outputs.image_repository }}"
+          NEW_IMAGE_TAG="${{ github.sha }}"
+
+          echo "Updating $DEV_VALUES_FILE with repository: $NEW_IMAGE_REPOSITORY and tag: $NEW_IMAGE_TAG"
+
+          yq e ".image.repository = \"$NEW_IMAGE_REPOSITORY\" | .image.tag = \"$NEW_IMAGE_TAG\"" -i "$DEV_VALUES_FILE"
+
+          git add "$DEV_VALUES_FILE"
+          git diff --staged --quiet || (git commit -m "chore(dev): Update flask-app image to $NEW_IMAGE_TAG" && git push origin main)
+          echo "Finished updating GitOps repository."
+        working-directory: gitops-repo
