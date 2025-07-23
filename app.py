@@ -42,7 +42,7 @@ def reset():
     global secret_number, guess_count
     secret_number = random.randint(1, 100)
     guess_count = 0
-    return "🔄 Game has been reset! I'm thinking of a new number between 1 and 100."
+    return "🔄 Game has been reset now! I'm thinking of a new number between 1 and 100."
 
 @app.route('/status')
 def status():
