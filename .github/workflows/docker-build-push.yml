@@ -11,7 +11,7 @@ on:
 env:
   PROJECT_ID: grogu-project                  # Your GCP project ID
   AR_REPO_LOCATION: us-central1              # Region of your Artifact Registry (e.g., us-central1)
-  AR_REPO_NAME: flask-app-repo              # Name of your Artifact Registry Docker repository (e.g., flask-app-repo)
+  AR_REPO_NAME: gcr.io              # Name of your Artifact Registry Docker repository (e.g., flask-app-repo)
   IMAGE_NAME: flask-app                      # Name for your Docker image within the repository
 
 jobs:
