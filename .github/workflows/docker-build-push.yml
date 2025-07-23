@@ -47,18 +47,17 @@ jobs:
 
       - name: Build Docker image
         run: |
-          # Define the full image path for Artifact Registry
           FULL_IMAGE_PATH=gcr.io/grogu-project/flask-app
-
-          IMAGE_TAG=latest
+          IMAGE_TAG=${{ github.sha }} # Use the commit SHA for the unique tag
 
           docker build -t $FULL_IMAGE_PATH:$IMAGE_TAG .
-          docker tag $FULL_IMAGE_PATH:$IMAGE_TAG $FULL_IMAGE_PATH:latest # Also tag as 'latest'
+          # Also tag with 'latest' if you want a movable tag
+          docker tag $FULL_IMAGE_PATH:$IMAGE_TAG $FULL_IMAGE_PATH:latest
 
       - name: Push Docker image
         run: |
           FULL_IMAGE_PATH=gcr.io/grogu-project/flask-app
-          IMAGE_TAG=${{ github.sha }}
+          IMAGE_TAG=${{ github.sha }} # Ensure this matches the build tag
 
           docker push $FULL_IMAGE_PATH:$IMAGE_TAG
           docker push $FULL_IMAGE_PATH:latest # Push the 'latest' tag as well
