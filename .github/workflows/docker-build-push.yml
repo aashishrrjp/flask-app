@@ -19,18 +19,17 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      # Removed 'id-token: write' as Workload Identity Federation is no longer used
 
     steps:
       - name: Checkout Application Repository
         uses: actions/checkout@v4
 
-      # --- Authenticate to Google Cloud using Service Account Key (less secure) ---
+      # --- Authenticate to Google Cloud using Service Account Key  ---
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }} # Base64-encoded service account key.
-                                                      # You MUST set this secret in your GitHub repo.
+                                                     
 
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -88,4 +87,21 @@ jobs:
           git add "$DEV_VALUES_FILE"
           git diff --staged --quiet || (git commit -m "chore(dev): Update flask-app image to $NEW_IMAGE_TAG" && git push origin main)
           echo "Finished updating GitOps repository."
+        working-directory: gitops-repo
+      - name: Update values-prod.yaml (Conditional/Manual for Production)
+        run: |
+          PROD_VALUES_FILE="helm/flask/values-prod.yaml"
+          NEW_IMAGE_REPOSITORY="${{ steps.build_image_step.outputs.image_repository }}"
+          # For production, it's best practice to use a specific, stable release tag (e.g., 'v1.0.0').
+          # This value should ideally come from a release versioning strategy, not just github.sha.
+          NEW_IMAGE_TAG="${{ github.sha }}" # <<< IMPORTANT: REPLACE WITH YOUR ACTUAL PRODUCTION RELEASE TAG
+
+          echo "Updating $PROD_VALUES_FILE with repository: $NEW_IMAGE_REPOSITORY and tag: $NEW_IMAGE_TAG"
+
+          yq e ".image.repository = \"$NEW_IMAGE_REPOSITORY\" | .image.tag = \"$NEW_IMAGE_TAG\"" -i "$PROD_VALUES_FILE"
+
+          git add "$PROD_VALUES_FILE"
+          # Commit and push only if there are actual changes
+          git diff --staged --quiet || (git commit -m "chore(prod): Update flask-app image to $NEW_IMAGE_TAG" && git push origin main)
+          echo "Finished updating GitOps repository for prod."
         working-directory: gitops-repo
